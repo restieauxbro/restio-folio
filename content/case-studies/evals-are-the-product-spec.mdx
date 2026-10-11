@@ -1,0 +1,169 @@
+---
+title: "Evals are the product spec"
+summary: "If you can't say what good looks like in a test, you don't have a spec. You have a vibe. Here's how I turn real traffic into one."
+date: "2026-05-14"
+tags: ["Evals", "Quality", "CI"]
+kind: "Field notes"
+role: "Product & engineering"
+stack: ["TypeScript", "Claude", "Postgres", "GitHub Actions"]
+index: "04"
+accent: "amber"
+featured: false
+---
+
+Early in my career I wrote a lot of product requirement documents. Beautiful things. Headings, user stories, acceptance criteria. Most of them were out of date by the second sprint, and nobody noticed, because nothing checked the product against them.
+
+AI products made me rethink that. When the behaviour of your system comes from a model, a prompt and a pile of tools, a written spec is even less binding than usual. The only description of "correct" that actually constrains the system is the one that runs. That's an eval set.
+
+So I've stopped thinking of evals as testing. I think of them as the spec, written in a form the computer can check.
+
+## Why a document isn't enough
+
+A requirement like "the assistant should answer questions about opening hours accurately and politely" sounds clear. It isn't. What about public holidays? What if two venues have similar names? What if the user asks in the middle of a complaint? What does "politely" mean when the answer is no?
+
+Every one of those questions gets answered eventually. Usually by whoever happens to be editing the prompt that day. An eval set forces the answers to be written down as examples, agreed on, and checked every time something changes.
+
+<PullQuote>The only description of correct that actually constrains the system is the one that runs.</PullQuote>
+
+## Start from real traffic
+
+The best eval cases are not invented. They're harvested. Synthetic examples are useful for coverage, but they tend to be cleaner, shorter and more polite than anything a real person types at 11pm on a phone.
+
+My process for a new product:
+
+1. **Ship to a small audience** with good tracing on.
+2. **Sample conversations** every week, weighted toward the interesting ones: low ratings, escalations, long sessions, tool errors.
+3. **Label them** with a simple rubric. Was the answer correct? Grounded? Did it take the right action? Was the tone right?
+4. **Promote good examples to the eval set**, with the expected behaviour written down, not just the expected text.
+5. **Keep a slice for regressions**: every bug that reaches users becomes a permanent case.
+
+After a few weeks you have a set that looks like your users, not like your imagination.
+
+### Write expectations, not answers
+
+For most cases, I don't store a single "golden" reply. Models phrase things differently every run, and exact-match scoring punishes harmless variation. Instead each case has a set of checks: must mention the closing time, must not invent a phone number, must call the availability tool before confirming, must offer an alternative if the slot is full.
+
+## LLM-as-judge, with calibration
+
+Some of those checks are deterministic: did the right tool get called, does the output match the schema. Those are easy and should be code. Others are judgement calls: is this grounded, is the tone appropriate, did it actually answer the question. For those I use a model as the judge.
+
+A judge model is useful and also a bit of a liar until you prove otherwise. Before I trust one, I calibrate it:
+
+- Take a few hundred cases that humans have already labelled.
+- Run the judge over them.
+- Compare. Where they disagree, read the cases and tighten the rubric.
+- Repeat until agreement is high enough that you'd trust it on cases nobody has reviewed.
+
+Then I keep checking. A slice of judged cases goes back to a human every week, because judges drift when the product changes underneath them.
+
+<Callout title="Make the judge show its working">
+Ask the judge for a short reason before the verdict, and store both. When a score looks wrong, the reason usually tells you whether the problem is the product, the rubric or the judge.
+</Callout>
+
+## A small eval runner
+
+You don't need a platform to start. Here is the core of a runner I'd happily put in a repo on day one:
+
+```ts
+interface EvalCase {
+  id: string;
+  input: string;
+  checks: Check[];
+  tags: string[];
+}
+
+type Check =
+  | { kind: "calledTool"; tool: string }
+  | { kind: "mentions"; text: string }
+  | { kind: "judge"; rubric: string };
+
+interface CaseResult {
+  id: string;
+  passed: boolean;
+  failures: string[];
+}
+
+export async function runEvals(
+  cases: EvalCase[],
+  agent: (input: string) => Promise<AgentRun>,
+  judge: (rubric: string, run: AgentRun) => Promise<{ pass: boolean; reason: string }>
+): Promise<CaseResult[]> {
+  const results: CaseResult[] = [];
+
+  for (const c of cases) {
+    const run = await agent(c.input);
+    const failures: string[] = [];
+
+    for (const check of c.checks) {
+      if (check.kind === "calledTool" && !run.toolCalls.some((t) => t.name === check.tool)) {
+        failures.push(`expected tool ${check.tool}`);
+      }
+      if (check.kind === "mentions" && !run.output.toLowerCase().includes(check.text.toLowerCase())) {
+        failures.push(`expected mention of "${check.text}"`);
+      }
+      if (check.kind === "judge") {
+        const verdict = await judge(check.rubric, run);
+        if (!verdict.pass) failures.push(`judge: ${verdict.reason}`);
+      }
+    }
+
+    results.push({ id: c.id, passed: failures.length === 0, failures });
+  }
+
+  return results;
+}
+```
+
+It's deliberately boring. Cases are data, checks are a small union type, and the judge is just another function you can swap or mock. Add parallelism and caching later, when you actually need them.
+
+## Regression gates in CI
+
+An eval set that runs when someone remembers is a nice-to-have. An eval set that blocks a merge is a spec.
+
+I wire evals into CI in two tiers. A fast tier of deterministic checks and a small judged sample runs on every pull request that touches prompts, tools, retrieval or model config. A full tier runs nightly and before any release.
+
+The gate rules are simple and agreed with the team up front:
+
+- Regression cases must all pass. These are bugs we've already shipped once.
+- Overall pass rate on each tag must not drop by more than an agreed margin against the main branch.
+- Any new failure gets a link to the trace in the pull request comment, so reviewers can see what changed rather than just that a number went down.
+
+Comparing against main matters. Absolute thresholds go stale. Relative ones answer the question you actually care about, which is whether this change made things better or worse.
+
+## Traps I've walked into
+
+A few mistakes that are easy to make and slow to notice:
+
+### Teaching to the test
+
+If the same person writes the prompt and the eval cases, the prompt slowly learns the cases rather than the job. I keep a held-out slice that nobody tunes against, and I rotate fresh traffic into it every few weeks. If scores on the held-out slice lag well behind the main set, the prompt is overfitting.
+
+### One number to rule them all
+
+A single headline pass rate hides everything interesting. A change can improve the common path and quietly break the rare, expensive one. I report by tag, always: bookings, complaints, menu questions, out-of-scope, safety. The headline number is for slides. The tags are for decisions.
+
+### Forgetting cost and latency
+
+An answer that is perfect and takes nine seconds is not perfect. I record tokens and latency alongside every eval run, so a model swap that improves quality but doubles the bill shows up as a trade-off rather than a surprise on the invoice.
+
+### Letting the set rot
+
+Products change. Menus change, policies change, tools get renamed. Cases that encode last quarter's rules start failing for the right reasons, and people learn to ignore red. Every case gets an owner tag and a review date, and stale ones get fixed or retired rather than skipped.
+
+## Shipping with confidence
+
+The real payoff isn't catching bugs, although it does that. It's that changes stop being scary. Want to try a new model? Run the set. Want to shorten the system prompt? Run the set. Want to add a tool? Add cases for it first, watch them fail, then make them pass.
+
+It also changes conversations with stakeholders. Instead of "we think the new version is better", you can say "it's better on bookings and complaints, slightly worse on menu questions, and here are the three cases that got worse". That's a conversation people can make decisions from.
+
+## The checklist
+
+- Eval cases come mostly from real, sampled traffic
+- Each case stores expected behaviour as checks, not a single golden reply
+- Every production bug becomes a permanent regression case
+- Deterministic checks are code. Judgement checks use a calibrated judge
+- Judge agreement with humans is re-checked regularly
+- Evals gate merges in CI, compared against the main branch
+- Failures link straight to traces
+
+Write the spec as evals and the product has something to live up to. Write it as a document and it has something to drift away from.

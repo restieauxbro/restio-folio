@@ -1,0 +1,167 @@
+---
+title: "Agents that run for hours without losing the plot"
+summary: "Long-running agents are a distributed systems problem in disguise. Checkpoints, ledgers and budgets keep them honest."
+date: "2026-07-09"
+tags: ["Agents", "Reliability", "Architecture"]
+kind: "Case study"
+role: "Architecture & build"
+stack: ["TypeScript", "Claude", "Postgres", "Temporal"]
+index: "03"
+accent: "cyan"
+featured: true
+---
+
+A chat assistant lives for a few seconds at a time. You ask, it answers, everyone moves on. An agent that runs for hours is a different animal. It reads, plans, calls tools, waits on things, gets interrupted, and has to pick up where it left off without redoing the expensive bits or, worse, doing the dangerous bits twice.
+
+The first time I built one of these, I treated it like a long chat. It worked beautifully in testing, where nothing ever crashed. Then it met real infrastructure, where containers restart, APIs go down for lunch, and context windows fill up somewhere around hour two.
+
+What I learned is that long-running agents are a distributed systems problem wearing an AI costume. The good news is that distributed systems people solved most of this years ago.
+
+## The failure modes
+
+Before the fixes, the ways it goes wrong:
+
+- **The process dies** and the agent starts again from scratch, re-sending the emails it already sent.
+- **The context fills up** and the agent forgets the goal, or the constraint you gave it in the first message.
+- **The agent loops**, confidently retrying a broken approach while spending money.
+- **The agent drifts**, completing a task that is adjacent to the one you asked for.
+- **Nobody knows what's happening** until it either finishes or doesn't.
+
+Each of these has a structural fix. None of them is fixed by a better prompt.
+
+## Checkpoint everything that matters
+
+The core idea is durable execution: the agent's progress is saved after every meaningful step, so a restart resumes rather than repeats. You can get this from a workflow engine, or build a lightweight version yourself on top of a database. Either way, the loop looks roughly like this:
+
+```ts
+interface Checkpoint {
+  runId: string;
+  step: number;
+  ledger: LedgerEntry[];
+  summary: string;
+  spentTokens: number;
+  status: "running" | "paused" | "done" | "failed";
+}
+
+interface LedgerEntry {
+  step: number;
+  intent: string;
+  toolCall?: { name: string; idempotencyKey: string };
+  outcome: "ok" | "error" | "skipped";
+  note: string;
+}
+
+export async function runAgent(runId: string, deps: Deps): Promise<Checkpoint> {
+  let cp = (await deps.store.load(runId)) ?? deps.freshCheckpoint(runId);
+
+  while (cp.status === "running") {
+    if (cp.spentTokens >= deps.budget.maxTokens) {
+      cp = { ...cp, status: "paused" };
+      await deps.notify(runId, "Budget reached. Waiting for a human to extend it.");
+      break;
+    }
+
+    const context = deps.assembleContext(cp);
+    const next = await deps.model.nextAction(context);
+    cp.spentTokens += next.usage.totalTokens;
+
+    if (next.kind === "finish") {
+      cp = { ...cp, status: "done", summary: next.summary };
+    } else {
+      const key = `${runId}:${cp.step}:${next.tool}`;
+      const result = await deps.tools.call(next.tool, next.args, key);
+      cp.ledger.push({
+        step: cp.step,
+        intent: next.intent,
+        toolCall: { name: next.tool, idempotencyKey: key },
+        outcome: result.ok ? "ok" : "error",
+        note: result.brief,
+      });
+      cp.step += 1;
+    }
+
+    if (deps.shouldCompact(cp)) cp = await deps.compact(cp);
+    await deps.store.save(cp);
+  }
+
+  return cp;
+}
+```
+
+There is nothing clever here, and that is deliberate. The state that matters lives in the checkpoint, not in the model's head. The model is consulted once per step, given a freshly assembled view of the world, and asked for the next action.
+
+<PullQuote>Long-running agents are a distributed systems problem wearing an AI costume.</PullQuote>
+
+## Make tools idempotent
+
+Checkpoints only help if replaying a step is safe. If the process dies after a tool runs but before the checkpoint saves, the next attempt will call that tool again.
+
+The fix is an idempotency key on every tool call that has side effects. In the loop above it is built from the run, the step number and the tool name, so a replay produces the same key. The tool layer stores the key with the result, and if it sees the same key again, it returns the stored result instead of doing the work twice.
+
+Read-only tools don't need this. Anything that sends, books, charges, writes or deletes absolutely does.
+
+## Context compaction and memory
+
+Hours of work will not fit in a context window, and even if it did, the model would pay less attention to the early parts. So I don't try to keep everything. I keep three things:
+
+1. **The brief**: the original goal and constraints, verbatim, always at the top. This never gets summarised.
+2. **The ledger**: a compact, structured list of what has been done and what happened. One line per step.
+3. **A rolling summary**: a short narrative of the current situation, rewritten during compaction.
+
+When the assembled context crosses a threshold, a compaction step asks the model to rewrite the summary from the ledger and the recent turns, then drops the raw turns. Anything the agent needs to look up later, like a long document it read in hour one, goes into a store it can search with a tool rather than staying pinned in the prompt.
+
+<Callout title="Keep the brief sacred">
+Most drift I've seen came from summarising the original instructions along with everything else. Summaries lose nuance. Constraints are all nuance. Pin them.
+</Callout>
+
+## The progress ledger is for humans too
+
+The ledger started as a way to help the model remember. It turned out to be the most useful thing for people as well. A plain list of "intent, action, outcome" is something a stakeholder can read in thirty seconds to see where the agent is up to and whether it's on track.
+
+I render it as a live view: current step, last few entries, tokens spent against budget, and anything waiting on approval. It is the difference between "the agent is running, trust me" and "here's exactly what it's doing".
+
+## Budgets and loop detection
+
+An agent with no budget is a credit card with no limit. I set three:
+
+- **Tokens or spend** per run, with a soft warning and a hard stop.
+- **Wall-clock time**, because some tasks should simply give up and report.
+- **Repeated actions**, detected by looking for the same tool with near-identical arguments several times in a short window.
+
+When any budget trips, the agent pauses rather than fails. It writes a short note on where it got to and why it stopped, and waits for a person to extend, redirect or cancel it.
+
+## Supervision and check-ins
+
+Full autonomy sounds great until the agent spends three hours solving the wrong problem. The fix is scheduled check-ins, not constant hand-holding.
+
+The patterns I use most:
+
+- **Plan approval up front.** The agent proposes a plan and the human approves or edits it before any side effects.
+- **Milestone check-ins.** At natural boundaries the agent posts a short update and keeps going unless told to stop.
+- **Approval gates** for risky actions, which pause just that branch of work while other steps continue.
+- **A supervisor pass**, where a separate, cheaper model reviews the ledger every so often and flags drift from the brief.
+
+The aim is to make it easy to say "yes, carry on" and just as easy to say "stop, that's wrong", without anyone needing to read a transcript.
+
+## Test the crash, not just the happy path
+
+Every one of these mechanisms is invisible when things go well, which means it's easy to ship them broken. So I test failure on purpose. Kill the worker between a tool call and a checkpoint save, and confirm the replay reuses the stored result. Fill the context artificially and check the brief survives compaction word for word. Feed the agent a tool that always fails and make sure the repetition budget trips before the spend budget does.
+
+These tests are slower and fiddlier than unit tests, and they are the ones that have saved me most often. A long-running agent that has only been tested on short runs is a short-running agent with ambitions.
+
+## Resumability is a feature
+
+Once the pieces are in place, something nice happens. Pausing becomes normal. A run can wait overnight for an approval, survive a deploy, or be handed to a different worker, and it simply carries on from the last checkpoint. That opens up tasks you wouldn't have trusted to an agent before, because the cost of interruption drops to almost nothing.
+
+## The checklist
+
+- Progress is checkpointed after every meaningful step
+- Side-effecting tools take an idempotency key
+- The original brief is pinned and never summarised
+- A structured ledger records intent, action and outcome
+- Context is compacted on a threshold, with long material moved to search
+- Token, time and repetition budgets pause the run rather than kill it
+- Humans approve the plan and any risky actions
+- There is a live view anyone can read in thirty seconds
+
+Agents that run for hours aren't magic. They're careful bookkeeping, plus a model that's good at choosing the next step. Get the bookkeeping right and the model gets to do the part it's good at.
