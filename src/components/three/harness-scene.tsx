@@ -283,7 +283,7 @@ function Rig() {
   );
 }
 
-export default function HarnessScene({ className }: { className?: string }) {
+export default function HarnessScene({ className, still = false }: { className?: string; still?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const visible = useRef(true);
 
@@ -324,22 +324,27 @@ export default function HarnessScene({ className }: { className?: string }) {
         dpr={[1, 1.75]}
         camera={{ position: [0, 0, 6.2], fov: 42 }}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-        frameloop="always"
+        frameloop={still ? "demand" : "always"}
         onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
       >
-        <Pauser visible={visible} />
+        <Pauser visible={visible} still={still} />
         <Rig />
       </Canvas>
     </div>
   );
 }
 
-/** Stop rendering while the canvas is scrolled out of view. */
-function Pauser({ visible }: { visible: React.RefObject<boolean> }) {
+/** Stop rendering while the canvas is scrolled out of view, or entirely for reduced motion. */
+function Pauser({ visible, still }: { visible: React.RefObject<boolean>; still: boolean }) {
   const { setFrameloop } = useThree();
   useEffect(() => {
+    // Reduced motion: render a single still frame.
+    if (still) {
+      setFrameloop("demand");
+      return;
+    }
     const id = setInterval(() => setFrameloop(visible.current ? "always" : "demand"), 250);
     return () => clearInterval(id);
-  }, [setFrameloop, visible]);
+  }, [setFrameloop, visible, still]);
   return null;
 }

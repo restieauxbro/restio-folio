@@ -73,7 +73,7 @@ export default function AboutPage() {
           <p className="label md:col-span-3">Bio</p>
           <div className="space-y-6 text-[clamp(1.15rem,1.6vw,1.4rem)] leading-relaxed text-bone-200 md:col-span-7">
             <p className="fade-up text-bone-50">
-              I&apos;m {site.name}, {site.title.toLowerCase()} at Australian Venue Co. in Melbourne. I started in marketing, picked up code to get things done faster, and never put it down.
+              I&apos;m {site.name}, AI Engineering Lead at Australian Venue Co. in Melbourne. I started in marketing, picked up code to get things done faster, and never put it down.
             </p>
             <p className="fade-up" style={d(1)}>
               That path matters. I&apos;ve owned the funnel and the codebase, so I build AI systems the way a product person would: start with the outcome, prototype quickly, then make it reliable enough that nobody has to think about it.

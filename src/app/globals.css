@@ -337,57 +337,82 @@
 
 ::view-transition-old(.page-forward),
 ::view-transition-old(.page-back) {
-  animation: 420ms var(--ease-in-out) both page-out;
+  animation: 380ms var(--ease-in-out) both page-out;
 }
 ::view-transition-new(.page-forward) {
-  animation: 760ms var(--ease-out) 160ms both page-in;
+  animation: 700ms var(--ease-out) 420ms both page-in;
 }
 ::view-transition-new(.page-back) {
-  animation: 760ms var(--ease-out) 160ms both page-in-back;
+  animation: 700ms var(--ease-out) 420ms both page-in-back;
 }
 
 @keyframes page-out {
   to {
     opacity: 0;
-    transform: translateY(-3vh) scale(0.985);
-    filter: blur(6px);
+    transform: translateY(-4vh) scale(0.98);
+    filter: blur(4px);
   }
 }
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(6vh);
-    clip-path: inset(18% 0 0 0 round 28px);
+    transform: translateY(5vh);
   }
   to {
     opacity: 1;
     transform: none;
-    clip-path: inset(0 0 0 0 round 0);
   }
 }
 @keyframes page-in-back {
   from {
     opacity: 0;
-    transform: translateY(-4vh);
-    clip-path: inset(0 0 18% 0 round 28px);
+    transform: translateY(-5vh);
   }
   to {
     opacity: 1;
     transform: none;
-    clip-path: inset(0 0 0 0 round 0);
   }
 }
 
-/* A sweep of signal colour across the viewport between pages */
-::view-transition-group(page-sweep) {
-  animation: none;
-  z-index: 90;
+::view-transition-old(.page-morph) {
+  animation: 300ms ease-out both page-fade-out;
 }
-::view-transition-old(page-sweep) {
-  display: none;
+::view-transition-new(.page-morph) {
+  animation: 520ms var(--ease-out) 180ms both page-fade-in;
 }
-::view-transition-new(page-sweep) {
+@keyframes page-fade-out {
+  to { opacity: 0; }
+}
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(2vh); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The curtain: a signal panel that wipes in, holds a beat, wipes out. */
+::view-transition-group(.sweep-up),
+::view-transition-group(.sweep-down) {
+  z-index: 95;
   animation: none;
+}
+::view-transition-new(.sweep-up),
+::view-transition-new(.sweep-down) {
+  background:
+    linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.12)),
+    var(--signal);
+  animation: 900ms var(--ease-in-out) both sweep-up;
+}
+::view-transition-new(.sweep-down) {
+  animation-name: sweep-down;
+}
+@keyframes sweep-up {
+  0% { clip-path: inset(100% 0 0 0); }
+  45%, 52% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 100% 0); }
+}
+@keyframes sweep-down {
+  0% { clip-path: inset(0 0 100% 0); }
+  45%, 52% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(100% 0 0 0); }
 }
 
 ::view-transition-group(site-header),

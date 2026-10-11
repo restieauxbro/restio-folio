@@ -12,6 +12,7 @@ export function CaseCard({ cs, flip = false, i = 0 }: { cs: CaseStudyMeta; flip?
     <article data-reveal className={cn("group relative", `accent-${cs.accent}`)}>
       <TLink
         href={`/case-studies/${cs.slug}`}
+              direction="morph"
         data-cursor="Read"
         className="fade-up grid gap-6 rounded-[28px] border border-border bg-ink-850/60 p-3 transition-[border-color,background-color] duration-700 hover:border-[color-mix(in_oklab,var(--accent-hue)_40%,transparent)] hover:bg-ink-850 sm:p-4 lg:grid-cols-12 lg:gap-10"
         style={{ "--i": i } as React.CSSProperties}

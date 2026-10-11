@@ -137,6 +137,7 @@ export default async function CaseStudyPage({ params }: PageProps<"/case-studies
           <section className="mx-auto mt-28 max-w-[1600px] px-4 sm:px-6 lg:px-10">
             <TLink
               href={`/case-studies/${next.slug}`}
+              direction="morph"
               data-cursor="Next"
               className={`group accent-${next.accent} grid items-end gap-8 rounded-[28px] border border-border bg-ink-850/60 p-3 transition-colors duration-700 hover:border-[color-mix(in_oklab,var(--accent-hue)_40%,transparent)] sm:p-4 md:grid-cols-12`}
             >

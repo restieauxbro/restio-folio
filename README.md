@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# restio-folio
 
-## Getting Started
+Portfolio for Tim Restieaux, AI engineer. Next.js 16 (App Router), React 19, Tailwind v4 and shadcn/ui, with a single deep-dark theme.
 
-First, run the development server:
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev          # http://localhost:3000. The gate stays open locally unless SITE_PASSWORD is set.
+pnpm build && SITE_PASSWORD=secret pnpm start
+pnpm lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Password gate
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The site has its own password gate, so it doesn't need Vercel's paid Password Protection.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/proxy.ts` checks every request (Next 16 renamed middleware to "proxy") for an HMAC cookie.
+- Requests without the cookie are redirected to `/unlock`.
+- `src/app/unlock/` holds the page and the server action that checks the password and sets the cookie. The cookie is httpOnly and lasts 30 days.
+- Set the password with the `SITE_PASSWORD` environment variable in Vercel (Production and Preview).
+- Changing the password signs everyone out.
+- In production, if `SITE_PASSWORD` is missing, the gate stays closed.
 
-## Learn More
+## Writing case studies
 
-To learn more about Next.js, take a look at the following resources:
+Add an `.mdx` file to `content/case-studies/`. The frontmatter looks like this:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```yaml
+title: "..."
+summary: "One or two sentences."
+date: "2026-10-02"
+tags: ["Harness", "Agents"]
+kind: "Case study"        # or "Field notes"
+role: "Architecture & build"
+stack: ["TypeScript", "Claude"]
+index: "05"               # sets the display order and number
+accent: "lime"            # lime | violet | cyan | amber
+featured: true            # shown on the home page
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+In the body you can use `<Callout title="...">` and `<PullQuote>`. Code fences are highlighted at build time with Shiki.
 
-## Deploy on Vercel
+Cover art is generated SVG. The motif for each slug is set in `src/components/site/case-cover.tsx`, and new slugs fall back to the lattice motif.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Where things live
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Path | What |
+| --- | --- |
+| `src/app/globals.css` | Theme tokens, prose styles, page-transition CSS |
+| `src/lib/site.ts` | Name, email, nav, experience, capabilities |
+| `src/components/three/` | The hero object: a model inside its harness (React Three Fiber) |
+| `src/components/fx/shader-surface.tsx` | WebGPU backgrounds from the `shaders` library, with CSS fallbacks |
+| `src/components/site/page.tsx` | Page transitions, using React `<ViewTransition>` plus a signal-coloured curtain |
+| `src/components/ui/` | shadcn/ui primitives |
+
+## Motion rules
+
+- Scrolling is always native. There is no scroll hijacking and no smooth-scroll library.
+- Reveals use IntersectionObserver.
+- The custom cursor and magnetic effects only run on fine pointers.
+- `prefers-reduced-motion` turns off transitions and shaders.
+- WebGPU shaders load only when `navigator.gpu` exists. Everywhere else gets a matching gradient.

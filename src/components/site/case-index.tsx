@@ -55,6 +55,7 @@ export function CaseIndex({ items }: { items: (CaseStudyMeta & { dateLabel: stri
           <li key={cs.slug} data-reveal className={`accent-${cs.accent}`}>
             <TLink
               href={`/case-studies/${cs.slug}`}
+              direction="morph"
               data-cursor="Read"
               onPointerEnter={(e) => onEnter(e, i)}
               onPointerMove={onMove}

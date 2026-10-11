@@ -12,7 +12,10 @@ export function proxy(request: NextRequest) {
   }
 
   const url = request.nextUrl.clone();
-  const next = request.nextUrl.pathname + request.nextUrl.search;
+  const params = new URLSearchParams(request.nextUrl.search);
+  params.delete("_vercel_share");
+  const query = params.toString();
+  const next = request.nextUrl.pathname + (query ? `?${query}` : "");
   url.pathname = "/unlock";
   url.search = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
   return NextResponse.redirect(url);
@@ -21,6 +24,6 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Everything except the unlock page, Next internals and static files the unlock page needs.
-    "/((?!unlock|_next/static|_next/image|favicon.ico|icon|apple-icon|robots.txt|fonts/).*)",
+    "/((?!unlock|_next/static|_next/image|favicon.ico|icon.svg|icon|apple-icon|robots.txt|fonts/).*)",
   ],
 };

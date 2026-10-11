@@ -21,10 +21,11 @@ function hasWebGL(): boolean {
 /** The hero object. Falls back to a still line drawing without WebGL. */
 export function Harness({ className }: { className?: string }) {
   const mode = useClientValue<"pending" | "3d" | "static">(() => (hasWebGL() ? "3d" : "static"), "pending");
+  const still = useClientValue(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, false);
 
   return (
     <div className={cn("relative", className)} aria-hidden>
-      {mode === "3d" ? <HarnessScene className="absolute inset-0" /> : mode === "static" ? <StaticHarness /> : null}
+      {mode === "3d" ? <HarnessScene className="absolute inset-0" still={still} /> : mode === "static" ? <StaticHarness /> : null}
     </div>
   );
 }
