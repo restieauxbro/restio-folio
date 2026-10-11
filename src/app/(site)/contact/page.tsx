@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import { Page } from "@/components/site/page";
 import { ShaderSurface } from "@/components/fx/shader-surface";
-import { CopyEmail } from "@/components/site/copy-email";
 import { LocalTime } from "@/components/site/local-time";
 import { site } from "@/lib/site";
+import { ContactForm } from "./contact-form";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -52,41 +52,49 @@ export default function ContactPage() {
               </span>
             </span>
           </h1>
-
-          <div className="mt-14 flex flex-col gap-6 border-t border-border pt-8 md:flex-row md:items-end md:justify-between">
-            <a
-              href={`mailto:${site.email}?subject=${encodeURIComponent("Project enquiry")}`}
-              data-cursor="Email"
-              className="fade-up group text-[clamp(1.6rem,4.4vw,4rem)] font-medium tracking-[-0.03em] text-bone-50"
-              style={d(2)}
-            >
-              <span className="link-underline">{site.email}</span>
-            </a>
-            <div className="fade-up flex items-center gap-4" style={d(3)}>
-              <CopyEmail />
-              <LocalTime className="label tabular-nums" />
-            </div>
-          </div>
         </div>
 
-        <div className="relative mx-auto mt-auto w-full max-w-[1600px] pt-20">
-          <ul className="grid gap-px overflow-hidden rounded-[28px] border border-border bg-border md:grid-cols-3">
-            {engagements.map((e, i) => (
-              <li key={e.no} data-reveal className="bg-ink-900/85 backdrop-blur-md">
-                <div className="fade-up p-6 sm:p-8" style={d(i)}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm text-signal">{e.no}</span>
-                    <span className="label">Engagement</span>
-                  </div>
-                  <h2 className="mt-10 text-2xl font-semibold tracking-[-0.02em] text-bone-50">{e.title}</h2>
-                  <p className="mt-3 leading-relaxed text-bone-400">{e.body}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.14em] text-bone-500">
-            Based in {site.location} · Open to remote engagements
-          </p>
+        <div className="relative mx-auto mt-16 grid w-full max-w-[1600px] gap-12 border-t border-border pt-10 lg:grid-cols-12 lg:gap-16">
+          <div id="enquire" className="scroll-mt-28 rounded-[28px] border border-border bg-ink-900/80 p-6 backdrop-blur-xl sm:p-10 lg:col-span-7">
+            <ContactForm email={site.email} />
+          </div>
+
+          <aside className="flex flex-col gap-10 lg:col-span-5">
+            <div>
+              <p className="label">Ways to work together</p>
+              <ul className="mt-6 border-t border-border">
+                {engagements.map((e, i) => (
+                  <li key={e.no} data-reveal className="border-b border-border">
+                    <div className="fade-up grid grid-cols-[2rem_1fr] gap-x-4 py-6" style={d(i)}>
+                      <span className="font-mono text-sm text-signal">{e.no}</span>
+                      <div>
+                        <h2 className="text-xl font-semibold tracking-[-0.02em] text-bone-50">{e.title}</h2>
+                        <p className="mt-2 leading-relaxed text-bone-400">{e.body}</p>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <dl className="grid grid-cols-2 gap-6">
+              <div>
+                <dt className="label">Based in</dt>
+                <dd className="mt-2 text-bone-200">{site.location}</dd>
+              </div>
+              <div>
+                <dt className="label">Local time</dt>
+                <dd className="mt-2">
+                  <LocalTime className="font-mono tabular-nums text-bone-200" />
+                </dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="label">Availability</dt>
+                <dd className="mt-2 flex items-center gap-2 text-bone-200">
+                  <span className="size-1.5 animate-pulse-dot rounded-full bg-signal" /> Taking select projects, remote friendly
+                </dd>
+              </div>
+            </dl>
+          </aside>
         </div>
       </section>
     </Page>
