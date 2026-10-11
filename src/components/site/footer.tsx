@@ -3,7 +3,6 @@ import { ShaderSurface } from "@/components/fx/shader-surface";
 import { TLink } from "./transition-link";
 import { RollText } from "./roll-text";
 import { LocalTime } from "./local-time";
-import { CopyEmail } from "./copy-email";
 import { PillLink } from "./pill-link";
 
 export function Footer() {
@@ -27,7 +26,6 @@ export function Footer() {
             </p>
             <div className="fade-up flex flex-wrap items-center gap-3" style={{ "--i": 3 } as React.CSSProperties}>
               <PillLink href="/contact#enquire">Start a conversation</PillLink>
-              <CopyEmail />
             </div>
           </div>
         </div>
@@ -49,9 +47,9 @@ export function Footer() {
             <p className="label">Contact</p>
             <ul className="mt-4 space-y-2 text-bone-200">
               <li>
-                <a href={`mailto:${site.email}`} className="link-underline break-all hover:text-bone-50">
-                  {site.email}
-                </a>
+                <TLink href="/contact#enquire" className="link-underline hover:text-bone-50">
+                  Send an enquiry
+                </TLink>
               </li>
             </ul>
           </div>

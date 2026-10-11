@@ -22,7 +22,7 @@ pnpm lint
 | Env var | Default | Notes |
 | --- | --- | --- |
 | `RESEND_API_KEY` | (required) | Without it, the form shows an "email me instead" message |
-| `CONTACT_TO_EMAIL` | `site.email` | Where enquiries land |
+| `CONTACT_TO_EMAIL` | (required) | Where enquiries land. It stays in server env so the address never appears on the site or in the repo |
 | `CONTACT_FROM_EMAIL` | `Portfolio <onboarding@resend.dev>` | Use an address on a domain verified in Resend. The `resend.dev` sender only delivers to your Resend account's own email |
 | `CONTACT_DRY_RUN` | unset | Set to `1` locally to log the email instead of sending it |
 
