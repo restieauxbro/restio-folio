@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useClientValue } from "@/hooks/use-client-value";
 import { cn } from "@/lib/utils";
 import type { SceneName } from "./shader-scenes";
 
@@ -24,21 +25,20 @@ const FALLBACKS: Record<SceneName, string> = {
  * motion), so the page never shows an empty canvas.
  */
 export function ShaderSurface({ scene, className }: { scene: SceneName; className?: string }) {
-  const [canRun, setCanRun] = useState(false);
+  const supported = useClientValue(
+    () => "gpu" in navigator && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    false,
+  );
+  const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const hasGpu = typeof navigator !== "undefined" && "gpu" in navigator;
-    if (!reduce && hasGpu) setCanRun(true);
-  }, []);
+  const canRun = supported && !failed;
 
   return (
     <div aria-hidden className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}>
       <div className="absolute inset-0" style={{ background: FALLBACKS[scene] }} />
       {canRun && (
         <div className={cn("absolute inset-0 transition-opacity duration-[1600ms]", ready ? "opacity-100" : "opacity-0")}>
-          <ShaderScene scene={scene} onReady={() => setReady(true)} onUnavailable={() => setCanRun(false)} />
+          <ShaderScene scene={scene} onReady={() => setReady(true)} onUnavailable={() => setFailed(true)} />
         </div>
       )}
     </div>

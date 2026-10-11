@@ -18,11 +18,18 @@ const BONE = new THREE.Color("#f2f0ea");
 
 const pointer = { x: 0, y: 0, speed: 0 };
 
+/** Deterministic hash-based random in [0, 1). */
+const rand = (n: number) => {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
 const coreVertex = /* glsl */ `
   uniform float uTime;
   uniform float uAgitation;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying vec3 vPos;
   varying float vNoise;
 
   // 3D simplex noise (Ashima / Stefan Gustavson)
@@ -72,11 +79,12 @@ const coreVertex = /* glsl */ `
 
   void main(){
     float t = uTime * 0.35;
-    float n = snoise(position * 1.6 + vec3(t, t * 0.6, -t));
-    float n2 = snoise(position * 4.0 - vec3(t * 1.4));
-    float disp = n * (0.14 + uAgitation * 0.16) + n2 * 0.03;
+    float n = snoise(position * 1.3 + vec3(t, t * 0.6, -t));
+    float n2 = snoise(position * 3.5 - vec3(t * 1.4));
+    float disp = n * (0.055 + uAgitation * 0.12) + n2 * 0.015;
     vNoise = n;
     vec3 p = position + normal * disp;
+    vPos = p;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     vNormal = normalize(normalMatrix * normal);
     vView = normalize(-mv.xyz);
@@ -88,16 +96,21 @@ const coreFragment = /* glsl */ `
   uniform vec3 uSignal;
   uniform vec3 uViolet;
   uniform float uAgitation;
+  uniform float uTime;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying vec3 vPos;
   varying float vNoise;
 
   void main(){
-    float fres = pow(1.0 - max(dot(normalize(vNormal), vView), 0.0), 2.2);
-    vec3 deep = vec3(0.018, 0.018, 0.03);
-    vec3 col = mix(deep, uViolet * 0.55, smoothstep(-0.4, 0.9, vNoise) * 0.5);
-    col += uSignal * fres * (0.9 + uAgitation * 0.6);
-    col += uSignal * smoothstep(0.55, 0.95, vNoise) * 0.35;
+    float fres = pow(1.0 - max(dot(normalize(vNormal), vView), 0.0), 3.0);
+    vec3 deep = vec3(0.012, 0.012, 0.02);
+    vec3 col = mix(deep, uViolet * 0.42, smoothstep(-0.5, 1.0, vNoise) * 0.6);
+    // scan lines: thin latitude bands drifting upward, like a model thinking
+    float bands = sin(vPos.y * 38.0 - uTime * 1.6);
+    float line = smoothstep(0.965, 1.0, bands) * (0.25 + uAgitation * 0.5);
+    col += uSignal * line * (0.35 + fres);
+    col += mix(uViolet, uSignal, fres) * fres * (1.1 + uAgitation * 0.8);
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -116,8 +129,9 @@ function Core() {
   );
   useFrame((_, dt) => {
     if (!mat.current || !mesh.current) return;
-    uniforms.uTime.value += dt;
-    uniforms.uAgitation.value = THREE.MathUtils.lerp(uniforms.uAgitation.value, Math.min(pointer.speed * 18, 1), 0.05);
+    const u = mat.current.uniforms;
+    u.uTime.value += dt;
+    u.uAgitation.value = THREE.MathUtils.lerp(u.uAgitation.value, Math.min(pointer.speed * 18, 1), 0.05);
     mesh.current.rotation.y += dt * 0.12;
     mesh.current.rotation.x += dt * 0.05;
   });
@@ -159,9 +173,9 @@ function Cage() {
     () =>
       Array.from({ length: SIGNAL_COUNT }, (_, i) => ({
         seg: (i * 7) % segments.length,
-        t: Math.random(),
-        speed: 0.25 + Math.random() * 0.5,
-        dir: Math.random() > 0.5 ? 1 : -1,
+        t: rand(i * 3),
+        speed: 0.25 + rand(i * 3 + 1) * 0.5,
+        dir: rand(i * 3 + 2) > 0.5 ? 1 : -1,
       })),
     [segments.length],
   );

@@ -34,7 +34,7 @@ export default function Home() {
         </div>
 
         <div className="relative mx-auto mt-auto w-full max-w-[1600px]" data-reveal>
-          <h1 className="display text-[clamp(3.4rem,13.2vw,15.5rem)] text-bone-50">
+          <h1 className="display text-[clamp(3.4rem,11.2vw,13.5rem)] text-bone-50">
             <span className="reveal-line">
               <span style={d(0, 250)}>I build the</span>
             </span>
@@ -150,7 +150,7 @@ export default function Home() {
           <div className="grid gap-6 border-t border-border pt-10 md:grid-cols-12">
             <p className="label md:col-span-3">[ 03 — What I do ]</p>
             <h2 className="display text-[clamp(2.4rem,5vw,4.8rem)] text-bone-50 md:col-span-9">
-              From first prototype to the on-call rota
+              From first prototype to the on‑call rota
             </h2>
           </div>
           <ul className="mt-14 grid gap-px overflow-hidden rounded-[28px] border border-border bg-border md:grid-cols-2">

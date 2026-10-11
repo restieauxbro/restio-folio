@@ -74,7 +74,12 @@ export function getAllCaseStudies(): CaseStudyMeta[] {
     .filter((f) => /\.mdx?$/.test(f))
     .map(read)
     .sort((a, b) => a.index.localeCompare(b.index))
-    .map(({ body: _body, headings: _headings, ...meta }) => meta);
+    .map((cs): CaseStudyMeta => {
+      const { body, headings, ...meta } = cs;
+      void body;
+      void headings;
+      return meta;
+    });
 }
 
 export function getCaseStudy(slug: string): CaseStudy | null {

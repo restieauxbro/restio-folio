@@ -15,7 +15,8 @@ export default async function UnlockPage({ searchParams }: PageProps<"/unlock">)
     <main id="main" className="relative isolate flex min-h-[100svh] flex-col overflow-hidden px-4 py-6 sm:px-6 lg:px-10">
       <ShaderSurface scene="hero" />
       <div aria-hidden className="blueprint absolute inset-0 opacity-60" />
-      <Harness className="absolute inset-0 -z-0 opacity-70" />
+      <Harness className="absolute inset-y-0 right-[-30%] -z-0 w-[90%] opacity-60 sm:right-[-12%] sm:w-[70%]" />
+      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(55%_60%_at_35%_50%,rgba(8,8,11,.85),transparent_75%)]" />
 
       <div className="relative flex items-center justify-between">
         <span className="font-display text-[15px] font-bold uppercase tracking-[0.02em] [font-variation-settings:'wdth'_80]">{site.short}</span>
@@ -24,7 +25,7 @@ export default async function UnlockPage({ searchParams }: PageProps<"/unlock">)
         </span>
       </div>
 
-      <div className="relative m-auto w-full max-w-xl py-16">
+      <div className="relative my-auto w-full max-w-xl py-16 sm:ml-[6%] lg:ml-[10%]">
         <p className="label">[ Restricted ]</p>
         <h1 className="display mt-6 text-[clamp(3.2rem,10vw,7rem)] text-bone-50">
           Guardrails{" "}

@@ -1,28 +1,30 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useClientValue } from "@/hooks/use-client-value";
 import { cn } from "@/lib/utils";
 
 const HarnessScene = dynamic(() => import("./harness-scene"), { ssr: false });
 
+let webgl: boolean | null = null;
 function hasWebGL(): boolean {
+  if (webgl !== null) return webgl;
   try {
     const c = document.createElement("canvas");
-    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+    webgl = !!(c.getContext("webgl2") || c.getContext("webgl"));
   } catch {
-    return false;
+    webgl = false;
   }
+  return webgl;
 }
 
 /** The hero object. Falls back to a still line drawing without WebGL. */
 export function Harness({ className }: { className?: string }) {
-  const [mode, setMode] = useState<"pending" | "3d" | "static">("pending");
-  useEffect(() => setMode(hasWebGL() ? "3d" : "static"), []);
+  const mode = useClientValue<"pending" | "3d" | "static">(() => (hasWebGL() ? "3d" : "static"), "pending");
 
   return (
     <div className={cn("relative", className)} aria-hidden>
-      {mode === "3d" ? <HarnessScene className="absolute inset-0" /> : <StaticHarness />}
+      {mode === "3d" ? <HarnessScene className="absolute inset-0" /> : mode === "static" ? <StaticHarness /> : null}
     </div>
   );
 }

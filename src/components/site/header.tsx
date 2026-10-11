@@ -35,10 +35,13 @@ export function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
+  // Reset menu and header visibility on navigation (adjusting state during render).
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
     setOpen(false);
     setHidden(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!open) return;
