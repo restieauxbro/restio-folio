@@ -1,0 +1,171 @@
+---
+title: "Harness engineering: the model is the engine, not the car"
+summary: "Everyone argues about which model to use. The bit that decides whether your agent works is everything you build around it."
+date: "2026-10-02"
+tags: ["Harness", "Agents", "Architecture"]
+kind: "Case study"
+role: "Architecture & build"
+stack: ["TypeScript", "Claude", "Postgres", "OpenTelemetry"]
+index: "01"
+accent: "lime"
+featured: true
+---
+
+Every few weeks a new model lands and my feeds fill up with benchmark charts. Fair enough. Engines are exciting. But nobody has ever driven an engine to the shops. You drive a car, and the car is mostly not engine.
+
+That is the frame I use for AI products now. The model is the engine: powerful, expensive, a bit temperamental. The harness is the car: the steering, the brakes, the dashboard, the seatbelts, the boot where you keep the shopping. Tools, context assembly, state, retries, permissions, evals and observability. When an agent "doesn't work", I have almost never found the root cause in the model. It is nearly always the harness.
+
+This piece is how I think about designing one.
+
+## What a harness actually is
+
+Strip away the vocabulary and an agent harness is a loop with opinions. It decides what the model sees, what the model is allowed to do, what happens when something fails, and how you find out what went on afterwards.
+
+I break it into seven parts:
+
+1. **Tools**: the verbs the model can use.
+2. **Context assembly**: what goes into the prompt on each turn, and in what order.
+3. **State**: what the system remembers between turns and between sessions.
+4. **Retries and recovery**: what happens when a call times out, a tool throws, or the model returns nonsense.
+5. **Permissions**: which actions need a check, a policy, or a human.
+6. **Evals**: how you know a change made things better rather than different.
+7. **Observability**: traces you can actually read at 2am.
+
+You can ship a demo with two of these. You cannot ship a product with fewer than all seven.
+
+<PullQuote>Nobody has ever driven an engine to the shops.</PullQuote>
+
+## Tools are an API for a very literal colleague
+
+The model reads your tool definitions the way a new hire reads a runbook: closely, literally, and with no idea what you meant but didn't write down. So I write tool descriptions like documentation for a smart contractor on their first day.
+
+A few rules I keep coming back to:
+
+- **Fewer, sharper tools beat many vague ones.** If two tools overlap, the model will pick the wrong one at the worst moment.
+- **Name things by intent, not implementation.** `find_available_tables` beats `query_inventory_v2`.
+- **Return errors the model can act on.** "Date must be in the future" is useful. A stack trace is not.
+- **Make outputs small.** A tool that dumps 40KB of JSON into the context is a tool that quietly ruins every turn after it.
+
+Picture a venue-booking assistant. The tempting design is one big `database` tool and a clever prompt. The design that works is five narrow tools that each do one job, validate their own inputs, and return a short summary the model can reason over.
+
+## Context assembly is the real prompt engineering
+
+People still talk about "the prompt" as if it were one string. In a harness it is a build step. On every turn you are assembling a document from parts: system instructions, tool definitions, retrieved facts, conversation history, scratchpad notes, and the user's latest message.
+
+I treat that assembly as code with tests. Each section has a budget. Each source has a priority. When the budget runs out, low-priority material gets summarised or dropped, and the order is deterministic so a bug today is the same bug tomorrow.
+
+### Order matters more than you'd think
+
+Stable material goes first so it can be cached. Volatile material goes last so it is freshest in the model's attention. Instructions that must never be ignored get repeated near the end, briefly. None of this is magic. It is just being deliberate about a thing most teams leave to chance.
+
+## State: decide what you're allowed to forget
+
+There are three kinds of state in an agent, and mixing them up causes most of the weird bugs I see:
+
+- **Conversation state**: what was said. Cheap, noisy, grows forever.
+- **Task state**: what has been done and what is left. Small, structured, precious.
+- **World state**: the actual bookings, tickets or records in your systems. The source of truth.
+
+The model should never be the only place task state lives. If the only record that a refund was issued is a sentence in the chat history, you have built a system that can forget it paid someone. Keep task state in a table. Let the model read it and propose changes to it. Let your code write it.
+
+<Callout title="A rule of thumb">
+If losing the context window would lose money, data or trust, that thing belongs in a database, not in the prompt.
+</Callout>
+
+## Permissions belong in the harness, not the prompt
+
+"Please don't delete anything without asking" is a wish, not a control. Permissions should be enforced by the code that executes tools, before the tool runs. The model can request any action it likes. The harness decides whether it happens.
+
+Here is the shape of the wrapper I reach for. Every tool goes through it, which means every tool gets the same policy checks, logging and approval flow for free.
+
+```ts
+type Risk = "read" | "write" | "destructive";
+
+interface ToolSpec<I, O> {
+  name: string;
+  risk: Risk;
+  run: (input: I, ctx: RunContext) => Promise<O>;
+}
+
+interface RunContext {
+  userId: string;
+  traceId: string;
+  grants: Set<string>;
+  requestApproval: (summary: string) => Promise<boolean>;
+  log: (event: string, data: Record<string, unknown>) => void;
+}
+
+export function guarded<I, O>(spec: ToolSpec<I, O>) {
+  return async (input: I, ctx: RunContext): Promise<O | { error: string }> => {
+    const grant = `${spec.name}:${spec.risk}`;
+    ctx.log("tool.requested", { tool: spec.name, risk: spec.risk, input });
+
+    if (spec.risk !== "read" && !ctx.grants.has(grant)) {
+      return { error: `Not permitted: ${spec.name}. Ask the user to enable it.` };
+    }
+
+    if (spec.risk === "destructive") {
+      const ok = await ctx.requestApproval(
+        `${spec.name} with ${JSON.stringify(input)}`
+      );
+      if (!ok) return { error: "The user declined this action." };
+    }
+
+    const started = Date.now();
+    try {
+      const result = await spec.run(input, ctx);
+      ctx.log("tool.succeeded", { tool: spec.name, ms: Date.now() - started });
+      return result;
+    } catch (err) {
+      ctx.log("tool.failed", { tool: spec.name, error: String(err) });
+      return { error: `${spec.name} failed: ${(err as Error).message}` };
+    }
+  };
+}
+```
+
+Two details worth noticing. Denials come back as normal tool results, so the model can explain them to the user rather than crashing. And every path logs, which brings us to the bit everyone skips.
+
+## Retries: fail loudly, recover quietly
+
+Models time out. APIs rate-limit. Tools throw. A good harness treats this as weather, not as an emergency.
+
+I separate failures into three buckets. Transport failures (timeouts, 5xx) get retried with backoff and jitter. Validation failures (the model returned malformed arguments) get one corrective retry with the error fed back in. Logic failures (the tool ran and said no) go back to the model as information, because the model is usually good at choosing a different path once it knows the first one is closed.
+
+What I avoid is the infinite polite loop, where the agent retries the same broken call twenty times while apologising. Cap retries per tool, per turn and per session.
+
+## Evals and observability are the dashboard
+
+You would not drive a car with the dashboard painted over. Yet plenty of agents ship with no way to see what they did or whether last week's change helped.
+
+At minimum, I want every turn traced: assembled context size, which tools were called with what arguments, latency, token spend and the final answer. I want those traces searchable by user, by tool and by outcome. And I want a set of evals, built from real conversations, that runs on every change to prompts, tools or models. I've written separately about evals as the product spec, so I'll keep this short: if you can't measure it, you're not engineering it, you're hoping.
+
+<Callout title="Cheap win">
+Log the fully assembled context for a sample of turns. Half the "model is being dumb" bugs turn out to be "we sent it the wrong thing".
+</Callout>
+
+## Designing one from scratch
+
+When I start a new harness, I go roughly in this order:
+
+1. Write down the jobs the agent must do and the jobs it must never do.
+2. Design the smallest set of tools that covers the first list.
+3. Put the permission wrapper in before the first tool, not after the first incident.
+4. Build context assembly as a tested function with explicit budgets.
+5. Move task state into a real store on day one.
+6. Add tracing before adding features.
+7. Turn the first week of real conversations into an eval set.
+
+Then, and only then, I start comparing models. By that point swapping the engine is a config change, and the benchmark charts finally mean something, because you can see how each one drives in your car.
+
+## The checklist
+
+- Tools are narrow, well named and return actionable errors
+- Context is assembled by code with budgets and a fixed order
+- Task state lives outside the context window
+- Permissions are enforced at execution time, not requested in the prompt
+- Retries are bounded and classified by failure type
+- Every turn is traced and searchable
+- Evals run on every change, and nobody merges on vibes
+
+The model will keep getting better. That's great. It means the gap between a good harness and a bad one gets more obvious, not less. A faster engine in a car with no brakes is not an upgrade.

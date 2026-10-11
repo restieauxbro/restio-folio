@@ -1,0 +1,157 @@
+---
+title: "Guardrails that don't get in the way"
+summary: "Safety for AI products works best as layers, each cheap and specific, so the user feels a helpful assistant rather than a nervous one."
+date: "2026-08-21"
+tags: ["Guardrails", "Safety", "UX"]
+kind: "Field notes"
+role: "Design & build"
+stack: ["TypeScript", "Claude", "Zod", "Redis"]
+index: "02"
+accent: "violet"
+featured: true
+---
+
+There are two ways to get guardrails wrong. The first is to have none, and find out what your assistant is capable of from a screenshot on social media. The second is to have so many that every answer arrives four seconds late, wrapped in disclaimers, refusing to tell someone what time the kitchen closes.
+
+I've seen both. The second is more common in big organisations, and in some ways it's worse, because it fails quietly. Nobody writes a news story about an assistant that is merely useless. People just stop using it.
+
+So here is how I think about guardrails now: as a stack of thin layers, each with one job, arranged so that the expensive checks only run when the cheap ones say they should.
+
+## Why one big filter doesn't work
+
+The instinct is to put a single moderation call in front of the model and another behind it. It feels tidy. It is also slow, blunt and easy to get around.
+
+A single filter has to be good at everything: abuse, prompt injection, personal data, off-topic requests, hallucinated policy, unsafe tool calls. Nothing is good at everything. You end up tuning one threshold that is either too twitchy for normal users or too relaxed for the weird ones.
+
+Layers let each check be narrow, which means each one can be fast, accurate and tested on its own.
+
+<PullQuote>Nobody writes a news story about an assistant that is merely useless. People just stop using it.</PullQuote>
+
+## The layers
+
+I think of a request passing through five zones. Not every request touches every zone. That is the point.
+
+### 1. Input validation
+
+The cheapest layer, and the most underrated. Before any model sees anything:
+
+- Enforce length limits and strip control characters.
+- Detect and redact obvious personal data you don't need, like card numbers.
+- Tag content that came from outside the user's own typing, such as pasted documents, emails or web pages, so later layers know it is untrusted.
+
+That last one matters for prompt injection. You can't reliably stop a model from reading instructions hidden in a document. You can make sure the harness knows which text came from where, and refuse to let untrusted text grant itself new permissions.
+
+### 2. Policy checks
+
+This is where a small, fast classifier or a cheap model call decides whether the request is in scope. Is this a question the product should answer at all? Is it a known abuse pattern?
+
+The trick is to make this layer route, not just block. Out-of-scope requests can get a friendly redirect. Borderline requests can go down a more careful path. Only the clearly bad stuff gets a hard no.
+
+### 3. Tool permissioning
+
+If your assistant can take actions, this is the layer that actually protects you. Each tool has a risk level, and the harness enforces it at execution time. Reads are free. Writes need the right grant. Anything destructive or financial needs explicit confirmation.
+
+Here's a compact version of how I express that as policy, separate from the tools themselves:
+
+```ts
+import { z } from "zod";
+
+type Decision =
+  | { kind: "allow" }
+  | { kind: "confirm"; message: string }
+  | { kind: "deny"; reason: string };
+
+interface ToolCall {
+  name: string;
+  args: unknown;
+  source: "user" | "untrusted";
+}
+
+const RefundArgs = z.object({
+  orderId: z.string().min(1),
+  amountCents: z.number().int().positive(),
+});
+
+const policies: Record<string, (call: ToolCall) => Decision> = {
+  search_menu: () => ({ kind: "allow" }),
+
+  issue_refund: (call) => {
+    if (call.source === "untrusted") {
+      return { kind: "deny", reason: "Refunds can't be triggered by document content." };
+    }
+    const parsed = RefundArgs.safeParse(call.args);
+    if (!parsed.success) {
+      return { kind: "deny", reason: "Refund details were incomplete." };
+    }
+    const dollars = (parsed.data.amountCents / 100).toFixed(2);
+    return {
+      kind: "confirm",
+      message: `Refund $${dollars} on order ${parsed.data.orderId}?`,
+    };
+  },
+};
+
+export function decide(call: ToolCall): Decision {
+  const policy = policies[call.name];
+  if (!policy) return { kind: "deny", reason: `Unknown tool: ${call.name}` };
+  return policy(call);
+}
+```
+
+Policy as data has a nice side effect: you can review it in a pull request, test it without a model, and show it to the people who own the risk.
+
+### 4. Structured outputs
+
+A lot of "the model said something wrong" incidents are really "we let the model say anything". When the output is going to drive a UI or a downstream system, ask for a schema and validate it. If the response fails validation, retry once with the error, then fall back to a safe default.
+
+Structured outputs also make the final layer easier, because checking a field called `refundAmount` is a lot simpler than parsing a paragraph for numbers.
+
+### 5. Output checks and escalation
+
+The last layer looks at what is about to go to the user. Is it grounded in the retrieved sources? Does it make a promise the business can't keep? Does it contain something that slipped past input redaction?
+
+When this layer isn't sure, the answer is not always to refuse. Often it is to escalate: hand off to a human, offer a callback, or answer the safe part and flag the rest. A good escalation path is the release valve that lets every other layer be a little less paranoid.
+
+<Callout title="Human in the loop, done properly">
+Design the handoff like a feature. Pass the full context to the human, tell the user what happens next and how long it will take, and log the outcome so it can become an eval case.
+</Callout>
+
+## Keeping it fast
+
+Guardrails cost latency, and latency is UX. A few patterns that keep the stack quick:
+
+- **Run cheap checks first, and in parallel.** Regex and schema checks are effectively free. Classifiers can run alongside retrieval rather than before it.
+- **Gate the expensive checks.** Only run a heavyweight grounding check when the answer cites policy, prices or anything with legal weight.
+- **Stream, then verify the risky bits.** For conversational replies, you can often stream the text and hold back only the structured parts, like a booking confirmation, until they pass validation.
+- **Cache policy decisions.** The same out-of-scope question gets asked a thousand times. Answer it the same way each time, without paying for a model call.
+
+The goal is that a normal user on a normal day never notices any of this. The guardrails are there, but they feel like good manners rather than a security queue.
+
+## Refusals are UX too
+
+When a guardrail does say no, how it says no matters as much as the decision. A flat "I can't help with that" teaches the user nothing and usually makes them rephrase until something slips through. A good refusal explains what the assistant can do instead, points to a human or another channel if there is one, and keeps the tone of the rest of the product.
+
+I write refusal copy the same way I'd write an error message in any other app: short, specific, and with a next step. Then I put the common ones in the eval set, so they stay helpful after the next prompt change.
+
+## Red-teaming, as a habit
+
+None of the layers matter if you only test them with polite inputs. I keep a living red-team set alongside the regular evals: injection attempts, social engineering, jailbreak phrasing, weird encodings, and the honest-but-dangerous requests real users make by accident.
+
+Two things keep this useful rather than theatrical. First, every incident or near miss from production gets added as a case. Second, the red-team set runs in CI with the rest of the evals, so a prompt tweak that reopens an old hole fails the build instead of reaching users.
+
+I also try to get people who didn't build the system to attack it. Builders test the holes they already know about. Someone from the support team will find the ones you don't.
+
+## The checklist
+
+- Inputs are length-limited, cleaned, and tagged by source
+- Policy checks route requests, not just block them
+- Tool permissions are enforced in code, at execution time
+- Untrusted content can never grant itself new permissions
+- Outputs that drive systems are schema-validated
+- There is a real, designed escalation path to a human
+- Expensive checks run only when the cheap ones say so
+- A red-team set runs in CI and grows from real incidents
+
+## What good feels like
+
+The best compliment I've had on a guardrail design was a stakeholder asking whether we'd turned them on yet. We had, weeks earlier. That's the target. Safety that is layered, specific and mostly invisible, so the assistant can be genuinely helpful in the ninety-something percent of conversations that are perfectly normal, and properly careful in the rest.
