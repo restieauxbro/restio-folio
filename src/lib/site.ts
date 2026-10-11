@@ -5,7 +5,6 @@ export const site = {
   title: "AI Engineering Lead",
   location: "Melbourne, AU",
   timezone: "Australia/Melbourne",
-  email: "comfycactus@gmail.com",
   url: process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
     : "http://localhost:3000",

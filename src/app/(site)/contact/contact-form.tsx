@@ -11,7 +11,7 @@ import { TOPICS, type ContactField, type ContactState } from "./contact-shared";
 
 const MAX_MESSAGE = 5000;
 
-export function ContactForm({ email }: { email: string }) {
+export function ContactForm() {
   const [state, action, pending] = useActionState<ContactState, FormData>(sendEnquiry, { status: "idle" });
   const startedAt = useRef<HTMLInputElement>(null);
   const [count, setCount] = useState(0);
@@ -126,12 +126,7 @@ export function ContactForm({ email }: { email: string }) {
           {state.status === "error" ? (
             <span className="text-destructive">{state.message}</span>
           ) : (
-            <span className="text-bone-400">
-              Prefer email?{" "}
-              <a href={`mailto:${email}`} className="text-bone-50 link-underline">
-                {email}
-              </a>
-            </span>
+            <span className="text-bone-400">Goes straight to my inbox. I reply personally.</span>
           )}
         </p>
         <button

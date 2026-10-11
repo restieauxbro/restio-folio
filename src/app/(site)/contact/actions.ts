@@ -3,7 +3,6 @@
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
-import { site } from "@/lib/site";
 import { TOPICS, type ContactField, type ContactState } from "./contact-shared";
 
 const schema = z.object({
@@ -19,6 +18,9 @@ const schema = z.object({
 });
 
 type Field = ContactField;
+
+const UNAVAILABLE = "The form isn't taking messages right now. Please try again later, or reach me on LinkedIn.";
+const FAILED = "Something went wrong sending that. Please try again in a minute.";
 
 /** Submissions faster than this after the form renders are almost certainly bots. */
 const MIN_FILL_MS = 2500;
@@ -93,30 +95,31 @@ export async function sendEnquiry(_prev: ContactState, formData: FormData): Prom
 <p style="margin:24px 0 0;font:13px/1.5 system-ui,sans-serif;color:#75736d">Reply to this email to respond to ${escapeHtml(name)} directly.</p>
 </div></body></html>`;
 
-  const to = process.env.CONTACT_TO_EMAIL || site.email;
+  // The destination address only ever lives in server env, never in the bundle or HTML.
+  const to = process.env.CONTACT_TO_EMAIL;
   const from = process.env.CONTACT_FROM_EMAIL || "Portfolio <onboarding@resend.dev>";
 
   // Local testing without sending real email.
   if (process.env.CONTACT_DRY_RUN === "1") {
-    console.info("[contact] dry run", { from, to, replyTo: email, subject, text });
+    console.info("[contact] dry run", { from, to: to ?? "(CONTACT_TO_EMAIL unset)", replyTo: email, subject, text });
     return { status: "sent", name };
   }
 
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.error("[contact] RESEND_API_KEY is not set");
-    return { status: "error", message: `The form isn't connected yet. Email me at ${site.email} instead.`, values: raw };
+  if (!apiKey || !to) {
+    console.error("[contact] RESEND_API_KEY or CONTACT_TO_EMAIL is not set");
+    return { status: "error", message: UNAVAILABLE, values: raw };
   }
 
   try {
     const { error } = await new Resend(apiKey).emails.send({ from, to, replyTo: email, subject, text, html });
     if (error) {
       console.error("[contact] resend error", error);
-      return { status: "error", message: `Something went wrong sending that. Email me at ${site.email} instead.`, values: raw };
+      return { status: "error", message: FAILED, values: raw };
     }
   } catch (err) {
     console.error("[contact] send failed", err);
-    return { status: "error", message: `Something went wrong sending that. Email me at ${site.email} instead.`, values: raw };
+    return { status: "error", message: FAILED, values: raw };
   }
 
   return { status: "sent", name };

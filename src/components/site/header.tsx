@@ -161,9 +161,9 @@ export function Header() {
           ))}
         </nav>
         <div className="flex items-end justify-between">
-          <a href={`mailto:${site.email}`} className="text-lg text-bone-50 link-underline">
-            {site.email}
-          </a>
+          <TLink href="/contact#enquire" onClick={() => setOpen(false)} className="text-lg text-bone-50 link-underline">
+            Send an enquiry
+          </TLink>
           <LocalTime className="label tabular-nums" />
         </div>
       </div>

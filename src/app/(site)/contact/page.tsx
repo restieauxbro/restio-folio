@@ -56,7 +56,7 @@ export default function ContactPage() {
 
         <div className="relative mx-auto mt-16 grid w-full max-w-[1600px] gap-12 border-t border-border pt-10 lg:grid-cols-12 lg:gap-16">
           <div id="enquire" className="scroll-mt-28 rounded-[28px] border border-border bg-ink-900/80 p-6 backdrop-blur-xl sm:p-10 lg:col-span-7">
-            <ContactForm email={site.email} />
+            <ContactForm />
           </div>
 
           <aside className="flex flex-col gap-10 lg:col-span-5">
