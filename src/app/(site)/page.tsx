@@ -34,7 +34,7 @@ export default function Home() {
         </div>
 
         <div className="relative mx-auto mt-auto w-full max-w-[1600px]" data-reveal>
-          <h1 className="display text-[clamp(3.4rem,11.2vw,13.5rem)] text-bone-50">
+          <h1 className="display text-[clamp(4rem,11.2vw,13.5rem)] text-bone-50">
             <span className="reveal-line">
               <span style={d(0, 250)}>I build the</span>
             </span>
