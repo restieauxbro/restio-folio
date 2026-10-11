@@ -34,6 +34,7 @@ export function Cursor() {
     const ringPos = { ...pos };
     let visible = false;
     let raf = 0;
+    let hovered: Element | null = null;
 
     const onMove = (e: PointerEvent) => {
       pos.x = e.clientX;
@@ -45,8 +46,8 @@ export function Cursor() {
         dot.current?.style.setProperty("opacity", "1");
         ring.current?.style.setProperty("opacity", "1");
       }
-      const target = (e.target as Element | null)?.closest?.("[data-cursor]");
-      setLabel(target ? target.getAttribute("data-cursor") || "" : null);
+      hovered = (e.target as Element | null)?.closest?.("[data-cursor]") ?? null;
+      setLabel(hovered ? hovered.getAttribute("data-cursor") || "" : null);
     };
     const onLeave = () => {
       visible = false;
@@ -57,6 +58,11 @@ export function Cursor() {
     const onUp = () => ring.current?.style.setProperty("--press", "1");
 
     const tick = () => {
+      // The hovered element can unmount under a still pointer (e.g. a form swapping to its success state).
+      if (hovered && !hovered.isConnected) {
+        hovered = null;
+        setLabel(null);
+      }
       ringPos.x += (pos.x - ringPos.x) * 0.18;
       ringPos.y += (pos.y - ringPos.y) * 0.18;
       if (dot.current) dot.current.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;

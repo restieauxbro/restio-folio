@@ -6,6 +6,9 @@ export const site = {
   location: "Melbourne, AU",
   timezone: "Australia/Melbourne",
   email: "comfycactus@gmail.com",
+  url: process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000",
   tagline: "I build the harness around the model.",
   description:
     "Tim Restieaux is an AI engineer in Melbourne who designs and builds production agent systems: harnesses, guardrails, evals and long-running agents.",

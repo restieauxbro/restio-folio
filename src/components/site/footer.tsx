@@ -26,9 +26,7 @@ export function Footer() {
               I take on a small number of advisory and build engagements each year. Tell me what you are trying to ship.
             </p>
             <div className="fade-up flex flex-wrap items-center gap-3" style={{ "--i": 3 } as React.CSSProperties}>
-              <PillLink href={`mailto:${site.email}`} external>
-                Start a conversation
-              </PillLink>
+              <PillLink href="/contact#enquire">Start a conversation</PillLink>
               <CopyEmail />
             </div>
           </div>

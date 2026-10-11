@@ -6,21 +6,25 @@ Portfolio for Tim Restieaux, AI engineer. Next.js 16 (App Router), React 19, Tai
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:3000. The gate stays open locally unless SITE_PASSWORD is set.
-pnpm build && SITE_PASSWORD=secret pnpm start
+pnpm dev          # http://localhost:3000. Add CONTACT_DRY_RUN=1 to test the form without sending.
+pnpm build && pnpm start
 pnpm lint
 ```
 
-## Password gate
+## Contact form
 
-The site has its own password gate, so it doesn't need Vercel's paid Password Protection.
+`/contact` has an enquiry form backed by a Server Action (`src/app/(site)/contact/actions.ts`) that sends via [Resend](https://resend.com).
 
-- `src/proxy.ts` checks every request (Next 16 renamed middleware to "proxy") for an HMAC cookie.
-- Requests without the cookie are redirected to `/unlock`.
-- `src/app/unlock/` holds the page and the server action that checks the password and sets the cookie. The cookie is httpOnly and lasts 30 days.
-- Set the password with the `SITE_PASSWORD` environment variable in Vercel (Production and Preview).
-- Changing the password signs everyone out.
-- In production, if `SITE_PASSWORD` is missing, the gate stays closed.
+- **Validation:** zod checks every field on the server. Errors appear next to the field, and what the visitor typed is kept.
+- **Spam protection:** a hidden honeypot field, a minimum time to fill the form, and a per-IP limit of 5 per 10 minutes. The limit lives in memory, so it's best effort.
+- **The email:** comes from `CONTACT_FROM_EMAIL` and goes to `CONTACT_TO_EMAIL`, with `replyTo` set to the visitor's address. Hit Reply to answer them directly.
+
+| Env var | Default | Notes |
+| --- | --- | --- |
+| `RESEND_API_KEY` | (required) | Without it, the form shows an "email me instead" message |
+| `CONTACT_TO_EMAIL` | `site.email` | Where enquiries land |
+| `CONTACT_FROM_EMAIL` | `Portfolio <onboarding@resend.dev>` | Use an address on a domain verified in Resend. The `resend.dev` sender only delivers to your Resend account's own email |
+| `CONTACT_DRY_RUN` | unset | Set to `1` locally to log the email instead of sending it |
 
 ## Writing case studies
 

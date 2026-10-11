@@ -37,7 +37,8 @@ export const metadata: Metadata = {
     template: `%s | ${site.name}`,
   },
   description: site.description,
-  robots: { index: false, follow: false },
+  metadataBase: new URL(site.url),
+  openGraph: { type: "website", siteName: site.name, locale: "en_AU" },
 };
 
 export const viewport: Viewport = {
