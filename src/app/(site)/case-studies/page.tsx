@@ -45,7 +45,7 @@ export default function CaseStudiesPage() {
         <section className="px-4 pb-20 sm:px-6 lg:px-10">
           <div className="mx-auto max-w-[1600px]">
             <p className="label mb-6">Latest</p>
-            <CaseCard cs={lead} />
+            <CaseCard cs={lead} as="h2" />
           </div>
         </section>
       )}

@@ -98,7 +98,7 @@ export default function AboutPage() {
             {principles.map((p, i) => (
               <li key={p.title} data-reveal className="group bg-ink-900">
                 <div className="fade-up flex h-full flex-col gap-8 p-6 sm:p-10" style={d(i)}>
-                  <span className="display text-[4.5rem] text-ink-600 transition-colors duration-500 group-hover:text-signal">{String(i + 1).padStart(2, "0")}</span>
+                  <span aria-hidden className="display text-[4.5rem] text-ink-600 transition-colors duration-500 group-hover:text-signal">{String(i + 1).padStart(2, "0")}</span>
                   <div>
                     <h3 className="text-2xl font-semibold tracking-[-0.02em] text-bone-50">{p.title}</h3>
                     <p className="mt-3 max-w-md leading-relaxed text-bone-400">{p.body}</p>

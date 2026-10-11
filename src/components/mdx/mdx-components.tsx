@@ -32,7 +32,7 @@ function Callout({ title, children }: { title?: string; children: ReactNode }) {
 
 function PullQuote({ children }: { children: ReactNode }) {
   return (
-    <figure className="relative my-16 border-y border-border py-10 sm:-mx-12 lg:-mx-24">
+    <figure className="relative my-16 border-y border-border py-10 lg:-mx-12 xl:-mx-24">
       <span aria-hidden className="absolute -top-px left-0 h-px w-24" style={{ background: "var(--accent-hue)" }} />
       <blockquote className="!border-0 !p-0 text-balance font-serif text-[clamp(1.8rem,3.6vw,3rem)] italic leading-[1.12] tracking-[-0.01em] text-bone-50">
         {children}

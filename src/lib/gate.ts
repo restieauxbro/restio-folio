@@ -35,8 +35,18 @@ export function isCorrectPassword(attempt: string): boolean {
 
 /** Only allow same-site relative redirects after unlocking. */
 export function safeNext(next: unknown): string {
-  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) {
+  if (typeof next !== "string" || !next.startsWith("/")) return "/";
+  // Browsers strip tabs/newlines from URLs, so "/\t/evil.com" becomes "//evil.com".
+  // Reject control characters, whitespace and backslashes outright.
+  if (/[\u0000-\u0020\u007f\\]/.test(next)) return "/";
+  const base = "http://gate.invalid";
+  let url: URL;
+  try {
+    url = new URL(next, base);
+  } catch {
     return "/";
   }
-  return next.startsWith("/unlock") ? "/" : next;
+  if (url.origin !== base) return "/";
+  const path = url.pathname + url.search + url.hash;
+  return path === "/unlock" || path.startsWith("/unlock/") || path.startsWith("/unlock?") ? "/" : path;
 }

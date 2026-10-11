@@ -7,7 +7,17 @@ import { CaseCover } from "./case-cover";
 import { TLink } from "./transition-link";
 
 /** Large featured case-study card. Cover and title morph into the article. */
-export function CaseCard({ cs, flip = false, i = 0 }: { cs: CaseStudyMeta; flip?: boolean; i?: number }) {
+export function CaseCard({
+  cs,
+  flip = false,
+  i = 0,
+  as: Heading = "h3",
+}: {
+  cs: CaseStudyMeta;
+  flip?: boolean;
+  i?: number;
+  as?: "h2" | "h3";
+}) {
   return (
     <article data-reveal className={cn("group relative", `accent-${cs.accent}`)}>
       <TLink
@@ -37,7 +47,7 @@ export function CaseCard({ cs, flip = false, i = 0 }: { cs: CaseStudyMeta; flip?
           </div>
           <div>
             <ViewTransition name={`cs-title-${cs.slug}`} share="morph" default="none">
-              <h3 className="display text-balance text-[clamp(2.2rem,4.4vw,4.4rem)] text-bone-50">{cs.title}</h3>
+              <Heading className="display text-balance text-[clamp(2.2rem,4.4vw,4.4rem)] text-bone-50">{cs.title}</Heading>
             </ViewTransition>
             <p className="mt-5 max-w-md text-[17px] leading-relaxed text-bone-400">{cs.summary}</p>
           </div>

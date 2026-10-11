@@ -24,6 +24,6 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Everything except the unlock page, Next internals and static files the unlock page needs.
-    "/((?!unlock|_next/static|_next/image|favicon.ico|icon.svg|icon|apple-icon|robots.txt|fonts/).*)",
+    "/((?!(?:unlock|favicon\\.ico|robots\\.txt)(?:/|$)|icon\\.svg$|_next/static/|_next/image).*)",
   ],
 };

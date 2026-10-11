@@ -48,9 +48,14 @@ export function Header() {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
+    // Everything except the header is inert while the menu covers it.
+    const header = document.getElementById("site-header");
+    const siblings = [...document.body.children].filter((el) => el !== header && !el.contains(header));
+    siblings.forEach((el) => el.setAttribute("inert", ""));
     return () => {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      siblings.forEach((el) => el.removeAttribute("inert"));
     };
   }, [open]);
 
@@ -58,6 +63,7 @@ export function Header() {
 
   return (
     <header
+      id="site-header"
       className={cn(
         "fixed inset-x-0 top-0 z-[100] transition-transform duration-500 ease-[var(--ease-out)]",
         hidden && !open && "-translate-y-full",
@@ -98,7 +104,7 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-5 md:flex">
+        <div className="hidden items-center gap-5 lg:flex">
           <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-bone-400">
             <span className="size-1.5 animate-pulse-dot rounded-full bg-signal" />
             Taking projects
@@ -145,6 +151,7 @@ export function Header() {
             <TLink
               key={item.href}
               href={item.href}
+              onClick={() => setOpen(false)}
               className="group flex items-baseline justify-between border-b border-border py-4"
               style={{ transitionDelay: `${i * 60}ms` }}
             >

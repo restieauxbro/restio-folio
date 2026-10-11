@@ -1,10 +1,29 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
-import { useClientValue } from "@/hooks/use-client-value";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { SceneName } from "./shader-scenes";
+
+/**
+ * Many browsers expose navigator.gpu without a usable adapter. Probe once per
+ * page load so the ~700 KB shader chunk is only fetched when it can render.
+ */
+let gpuProbe: Promise<boolean> | null = null;
+function probeGpu(): Promise<boolean> {
+  if (gpuProbe) return gpuProbe;
+  type GpuNavigator = Navigator & { gpu?: { requestAdapter(): Promise<unknown> } };
+  const gpu = (navigator as GpuNavigator).gpu;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  gpuProbe =
+    !gpu || reduce
+      ? Promise.resolve(false)
+      : gpu
+          .requestAdapter()
+          .then((adapter) => !!adapter)
+          .catch(() => false);
+  return gpuProbe;
+}
 
 const ShaderScene = dynamic(() => import("./shader-scenes"), { ssr: false });
 
@@ -25,10 +44,14 @@ const FALLBACKS: Record<SceneName, string> = {
  * motion), so the page never shows an empty canvas.
  */
 export function ShaderSurface({ scene, className }: { scene: SceneName; className?: string }) {
-  const supported = useClientValue(
-    () => "gpu" in navigator && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    false,
-  );
+  const [supported, setSupported] = useState(false);
+  useEffect(() => {
+    let live = true;
+    probeGpu().then((ok) => live && setSupported(ok));
+    return () => {
+      live = false;
+    };
+  }, []);
   const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
   const canRun = supported && !failed;
